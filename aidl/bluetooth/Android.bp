@@ -1,0 +1,36 @@
+//
+// SPDX-FileCopyrightText: 2016 The Android Open Source Project
+// SPDX-FileCopyrightText: The LineageOS Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_binary {
+    name: "android.hardware.bluetooth-service.samsung",
+    relative_install_path: "hw",
+    init_rc: ["android.hardware.bluetooth-service.samsung.rc"],
+    vintf_fragments: ["android.hardware.bluetooth-service.samsung.xml"],
+    srcs: [
+        "BluetoothAddress.cpp",
+        "BluetoothHci.cpp",
+        "VendorInterface.cpp",
+        "service.cpp",
+    ],
+    shared_libs: [
+        "android.hardware.bluetooth-V1-ndk",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libhidlbase",
+        "liblog",
+        "libutils",
+    ],
+    static_libs: [
+        "android.hardware.bluetooth-async",
+        "android.hardware.bluetooth-hci",
+    ],
+    vendor: true,
+}

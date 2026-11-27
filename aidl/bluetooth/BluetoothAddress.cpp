@@ -1,0 +1,81 @@
+/*
+ * SPDX-FileCopyrightText: 2016 The Android Open Source Project
+ * SPDX-FileCopyrightText: The LineageOS Project
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#define LOG_TAG "android.hardware.bluetooth-service.samsung"
+
+#include "BluetoothAddress.h"
+
+#include <android-base/logging.h>
+#include <cutils/properties.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+namespace aidl::android::hardware::bluetooth::impl {
+
+void BluetoothAddress::bytes_to_string(const uint8_t* addr, char* addr_str) {
+    sprintf(addr_str, "%02x:%02x:%02x:%02x:%02x:%02x", addr[0], addr[1], addr[2], addr[3], addr[4],
+            addr[5]);
+}
+
+bool BluetoothAddress::string_to_bytes(const char* addr_str, uint8_t* addr) {
+    if (addr_str == NULL) return false;
+    if (strnlen(addr_str, kStringLength) != kStringLength) return false;
+    unsigned char trailing_char = '\0';
+
+    return (sscanf(addr_str, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx%1c", &addr[0], &addr[1],
+                   &addr[2], &addr[3], &addr[4], &addr[5], &trailing_char) == kBytes);
+}
+
+bool BluetoothAddress::get_local_address(uint8_t* local_addr) {
+    char property[PROPERTY_VALUE_MAX] = {0};
+
+    // Get local bdaddr storage path from a system property.
+    if (property_get(PROPERTY_BT_BDADDR_PATH, property, NULL)) {
+        LOG(DEBUG) << __func__ << ": Trying " << property;
+
+        int addr_fd = open(property, O_RDONLY);
+        if (addr_fd != -1) {
+            char address[kStringLength + 1] = {0};
+            int bytes_read = read(addr_fd, address, kStringLength);
+            if (bytes_read == -1) {
+                PLOG(ERROR) << __func__ << ": Error reading address from " << property;
+            }
+            close(addr_fd);
+
+            // Null terminate the string.
+            address[kStringLength] = '\0';
+
+            // If the address is not all zeros, then use it.
+            const uint8_t zero_bdaddr[kBytes] = {0, 0, 0, 0, 0, 0};
+            if ((string_to_bytes(address, local_addr)) &&
+                (memcmp(local_addr, zero_bdaddr, kBytes) != 0)) {
+                LOG(DEBUG) << __func__ << ": Got Factory BDA";
+                return true;
+            } else {
+                LOG(ERROR) << __func__ << ": Got Invalid BDA '" << address << "' from " << property;
+            }
+        }
+    }
+
+    // No BDADDR found in the file. Look for BDA in a factory property.
+    if (property_get(FACTORY_BDADDR_PROPERTY, property, NULL) &&
+        string_to_bytes(property, local_addr)) {
+        LOG(DEBUG) << __func__ << ": Using FACTORY_BDADDR_PROPERTY";
+        return true;
+    }
+
+    // No factory BDADDR found. Look for a previously stored BDA.
+    if (property_get(PERSIST_BDADDR_PROPERTY, property, NULL) &&
+        string_to_bytes(property, local_addr)) {
+        LOG(DEBUG) << __func__ << ": Using PERSIST_BDADDR_PROPERTY";
+        return true;
+    }
+
+    return false;
+}
+
+}  // namespace aidl::android::hardware::bluetooth::impl
